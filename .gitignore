@@ -12,8 +12,16 @@ data/output/*.html
 data/output/*.json
 !data/output/.gitkeep
 
+# Output images (generated, not tracked)
+data/output/images/*.png
+data/output/images/*.jpg
+!data/output/images/.gitkeep
+
 # n8n runtime data
 docker/n8n_data/
+
+# nanoclaw cloned source (external repo — not tracked here)
+nanoclaw/app/
 
 # macOS
 .DS_Store
@@ -22,3 +30,4 @@ docker/n8n_data/
 .idea/
 .vscode/
 *.swp
+.env

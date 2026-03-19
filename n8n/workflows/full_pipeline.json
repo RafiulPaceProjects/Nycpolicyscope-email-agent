@@ -1,0 +1,111 @@
+{
+  "name": "NYC PolicyScope — Full Newsletter Pipeline",
+  "description": "Triggered by nanoclaw webhook. Reads content JSON, validates, generates images, renders HTML, saves output.",
+  "nodes": [
+    {
+      "id": "webhook_trigger",
+      "name": "Webhook: Run Newsletter Pipeline",
+      "type": "n8n-nodes-base.webhook",
+      "position": [200, 300],
+      "parameters": {
+        "path": "newsletter-pipeline",
+        "responseMode": "lastNode",
+        "httpMethod": "POST"
+      },
+      "webhookId": "newsletter-pipeline",
+      "notes": "Triggered by nanoclaw with:\nPOST /webhook/newsletter-pipeline\nBody: { \"content_file\": \"data/sample/newsletter_content.json\", \"generate_images\": true, \"image_prompt\": \"NYC cityscape\" }"
+    },
+    {
+      "id": "set_params",
+      "name": "Set Pipeline Parameters",
+      "type": "n8n-nodes-base.function",
+      "position": [400, 300],
+      "parameters": {
+        "functionCode": "const body = $input.first().json;\n\nconst params = {\n  content_file: body.content_file || 'data/sample/newsletter_content.json',\n  generate_images: body.generate_images !== false,\n  image_prompt: (body.image_prompt || 'NYC cityscape editorial photography professional').replace(/[`$();|&<>\\\\]/g, ' ').trim(),\n  image_ratio: body.image_ratio || '16:9',\n  timestamp: new Date().toISOString()\n};\n\nconsole.log('Pipeline parameters:', JSON.stringify(params, null, 2));\nreturn [{ json: params }];"
+      }
+    },
+    {
+      "id": "validate_content",
+      "name": "Validate Content JSON",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [600, 300],
+      "parameters": {
+        "command": "=cd /repo && python scripts/validate_json.py {{ $json.content_file }}"
+      },
+      "notes": "Validates content against schemas/newsletter.json before rendering."
+    },
+    {
+      "id": "check_validation",
+      "name": "Check Validation Result",
+      "type": "n8n-nodes-base.function",
+      "position": [800, 300],
+      "parameters": {
+        "functionCode": "const result = $input.first().json;\nif (result.exitCode !== 0) {\n  throw new Error('Content validation failed:\\n' + (result.stderr || result.stdout || 'unknown error'));\n}\nconsole.log('Validation passed:', result.stdout);\n// Pass through the parameters from earlier\nconst params = $node['Set Pipeline Parameters'].json;\nreturn [{ json: params }];"
+      }
+    },
+    {
+      "id": "generate_image_step",
+      "name": "Generate Newsletter Image",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1000, 300],
+      "parameters": {
+        "command": "=cd /repo && python scripts/generate_image.py --prompt \"{{ $json.image_prompt }}\" --ratio {{ $json.image_ratio }} --count 1 --json"
+      },
+      "notes": "Uses Imagen 2 via Google AI Studio API. Images are raw PNG — no Gemini logo.\nSkipped if generate_images is false."
+    },
+    {
+      "id": "parse_image_result",
+      "name": "Parse Image Result",
+      "type": "n8n-nodes-base.function",
+      "position": [1200, 300],
+      "parameters": {
+        "functionCode": "const cmdResult = $input.first().json;\nconst params = $node['Check Validation Result'].json;\n\nlet imagePath = null;\n\nif (cmdResult.exitCode === 0) {\n  try {\n    const stdout = cmdResult.stdout || '';\n    const jsonMatch = stdout.match(/\\{[\\s\\S]*\\}/);\n    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : stdout);\n    imagePath = parsed.images && parsed.images[0] ? parsed.images[0] : null;\n  } catch (e) {\n    console.warn('Could not parse image output — continuing without image:', e.message);\n  }\n} else {\n  console.warn('Image generation failed — continuing without image.');\n  console.warn(cmdResult.stderr);\n}\n\nreturn [{ json: { ...params, image_path: imagePath } }];"
+      }
+    },
+    {
+      "id": "render_html",
+      "name": "Render HTML Newsletter",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1400, 300],
+      "parameters": {
+        "command": "=cd /repo && python scripts/render_newsletter.py --content {{ $json.content_file }}"
+      },
+      "notes": "Runs render_newsletter.py which validates + renders the Jinja2 template.\nOutput saved to data/output/newsletter_YYYYMMDD_HHMMSS.html"
+    },
+    {
+      "id": "parse_render_result",
+      "name": "Parse Render Result",
+      "type": "n8n-nodes-base.function",
+      "position": [1600, 300],
+      "parameters": {
+        "functionCode": "const cmdResult = $input.first().json;\nconst params = $node['Parse Image Result'].json;\n\nif (cmdResult.exitCode !== 0) {\n  throw new Error('HTML rendering failed:\\n' + (cmdResult.stderr || cmdResult.stdout || 'unknown error'));\n}\n\n// Extract the output path from stdout\nconst stdout = cmdResult.stdout || '';\nconst pathMatch = stdout.match(/Preview saved:\\s*(.+\\.html)/);\nconst htmlPath = pathMatch ? pathMatch[1].trim() : 'data/output/ (check for latest .html file)';\n\nconst summary = {\n  status: 'success',\n  timestamp: params.timestamp,\n  content_file: params.content_file,\n  html_preview: htmlPath,\n  image_path: params.image_path,\n  message: 'Newsletter rendered successfully. Open the HTML file to review.'\n};\n\nconsole.log('Pipeline complete:', JSON.stringify(summary, null, 2));\nreturn [{ json: summary }];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Run Newsletter Pipeline": {
+      "main": [[{ "node": "Set Pipeline Parameters", "type": "main", "index": 0 }]]
+    },
+    "Set Pipeline Parameters": {
+      "main": [[{ "node": "Validate Content JSON", "type": "main", "index": 0 }]]
+    },
+    "Validate Content JSON": {
+      "main": [[{ "node": "Check Validation Result", "type": "main", "index": 0 }]]
+    },
+    "Check Validation Result": {
+      "main": [[{ "node": "Generate Newsletter Image", "type": "main", "index": 0 }]]
+    },
+    "Generate Newsletter Image": {
+      "main": [[{ "node": "Parse Image Result", "type": "main", "index": 0 }]]
+    },
+    "Parse Image Result": {
+      "main": [[{ "node": "Render HTML Newsletter", "type": "main", "index": 0 }]]
+    },
+    "Render HTML Newsletter": {
+      "main": [[{ "node": "Parse Render Result", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "version": 1,
+  "tags": ["pipeline", "webhook", "full"]
+}

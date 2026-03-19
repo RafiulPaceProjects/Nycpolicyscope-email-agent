@@ -1,0 +1,74 @@
+{
+  "name": "NYC PolicyScope — Generate Newsletter Images",
+  "description": "Triggered by nanoclaw webhook. Calls scripts/generate_image.py which uses Google Imagen 2 API. Returns raw PNG paths — no Gemini logo.",
+  "nodes": [
+    {
+      "id": "webhook_trigger",
+      "name": "Webhook: Generate Images",
+      "type": "n8n-nodes-base.webhook",
+      "position": [200, 300],
+      "parameters": {
+        "path": "generate-images",
+        "responseMode": "responseNode",
+        "httpMethod": "POST"
+      },
+      "webhookId": "generate-images",
+      "notes": "Expected body from nanoclaw:\n{\n  \"prompt\": \"NYC skyline editorial photo\",\n  \"aspect_ratio\": \"16:9\",\n  \"count\": 1\n}"
+    },
+    {
+      "id": "validate_input",
+      "name": "Validate and Sanitize Input",
+      "type": "n8n-nodes-base.function",
+      "position": [400, 300],
+      "parameters": {
+        "functionCode": "const body = $input.first().json;\n\n// Required\nif (!body.prompt || typeof body.prompt !== 'string' || body.prompt.trim().length < 5) {\n  throw new Error('Missing or invalid prompt. Minimum 5 characters.');\n}\n\n// Sanitize: strip any shell-special chars from prompt to prevent injection\nconst safePrompt = body.prompt.replace(/[`$();|&<>\\\\]/g, ' ').trim();\n\n// Validate aspect ratio\nconst validRatios = ['1:1', '16:9', '9:16', '4:3', '3:4'];\nconst ratio = validRatios.includes(body.aspect_ratio) ? body.aspect_ratio : '16:9';\n\n// Validate count\nconst count = Math.min(Math.max(parseInt(body.count || 1, 10), 1), 4);\n\nreturn [{ json: { prompt: safePrompt, aspect_ratio: ratio, count } }];"
+      }
+    },
+    {
+      "id": "run_image_gen",
+      "name": "Run generate_image.py",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [600, 300],
+      "parameters": {
+        "command": "=cd /repo && python scripts/generate_image.py --prompt \"{{ $json.prompt }}\" --ratio {{ $json.aspect_ratio }} --count {{ $json.count }} --json"
+      },
+      "notes": "Calls scripts/generate_image.py with --json flag.\nReturns JSON with image file paths.\nImages saved to data/output/images/ as raw PNG — no visible logo.\nRequires GOOGLE_AI_API_KEY in environment."
+    },
+    {
+      "id": "parse_result",
+      "name": "Parse Image Paths",
+      "type": "n8n-nodes-base.function",
+      "position": [800, 300],
+      "parameters": {
+        "functionCode": "const raw = $input.first().json;\nconst stdout = raw.stdout || '';\nconst stderr = raw.stderr || '';\n\nif (raw.exitCode !== 0) {\n  throw new Error('Image generation failed: ' + stderr);\n}\n\n// Parse the JSON output from the script\nlet result;\ntry {\n  // Find JSON block in stdout (after any print statements)\n  const jsonMatch = stdout.match(/\\{[\\s\\S]*\\}/);\n  result = JSON.parse(jsonMatch ? jsonMatch[0] : stdout);\n} catch (e) {\n  throw new Error('Could not parse image generation output: ' + stdout);\n}\n\nif (result.status !== 'success') {\n  throw new Error('Image generation returned error: ' + JSON.stringify(result));\n}\n\nreturn [{ json: result }];"
+      }
+    },
+    {
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1000, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'success', prompt: $json.prompt, aspect_ratio: $json.aspect_ratio, images: $json.images }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Generate Images": {
+      "main": [[{ "node": "Validate and Sanitize Input", "type": "main", "index": 0 }]]
+    },
+    "Validate and Sanitize Input": {
+      "main": [[{ "node": "Run generate_image.py", "type": "main", "index": 0 }]]
+    },
+    "Run generate_image.py": {
+      "main": [[{ "node": "Parse Image Paths", "type": "main", "index": 0 }]]
+    },
+    "Parse Image Paths": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "version": 1,
+  "tags": ["images", "imagen", "webhook"]
+}
