@@ -1,0 +1,31 @@
+{
+  "week_of": "2026-03-16",
+  "edition": "Vol. 1, No. 1",
+  "updates": [
+    {
+      "borough": "Manhattan",
+      "headline": "City Hall announces expanded congestion pricing relief fund",
+      "body": "Mayor's office confirmed $40M in relief funds for small businesses impacted by congestion pricing in lower Manhattan, with applications opening April 1."
+    },
+    {
+      "borough": "Brooklyn",
+      "headline": "Gowanus rezoning moves to final public review",
+      "body": "The Gowanus neighborhood rezoning plan enters its 60-day public comment period, potentially adding 8,000 new housing units near the canal."
+    },
+    {
+      "borough": "Queens",
+      "headline": "Jamaica Bay water quality initiative launches",
+      "body": "A new multi-agency effort to reduce runoff into Jamaica Bay kicks off this spring, targeting improved water quality by 2028."
+    },
+    {
+      "borough": "Bronx",
+      "headline": "New Bronx Community Land Trust secures $12M",
+      "body": "The South Bronx CLT received $12M in city funding to preserve 200 affordable units in Mott Haven over the next decade."
+    },
+    {
+      "borough": "Staten Island",
+      "headline": "North Shore ferry expansion studied",
+      "body": "DOT is studying three new ferry landing sites along the North Shore to reduce car dependency and improve transit access."
+    }
+  ]
+}

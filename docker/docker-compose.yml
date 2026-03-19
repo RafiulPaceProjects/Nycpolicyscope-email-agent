@@ -1,0 +1,52 @@
+version: "3.8"
+
+# NYC PolicyScope Lab — Local Development Stack
+# Starts n8n for workflow orchestration
+#
+# Usage:
+#   cd docker
+#   docker compose up -d
+#   Open: http://localhost:5678
+#
+# Data is persisted in Docker volumes between restarts.
+# Workflow JSON files live in /n8n/workflows for version control.
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: nycpolicyscope-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Basic auth to protect local instance
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=nycpolicy2026
+
+      # Timezone for NYC scheduling
+      - GENERIC_TIMEZONE=America/New_York
+      - TZ=America/New_York
+
+      # Disable telemetry
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+
+      # Allow reading local files (for template rendering node access)
+      - N8N_ALLOW_FILE_ACCESS_TO_PATHS=/data/sample,/data/output,/templates,/prompts
+
+      # Webhook base URL for local testing
+      - WEBHOOK_URL=http://localhost:5678/
+
+    volumes:
+      # Persist n8n data (workflows, credentials, execution history)
+      - n8n_data:/home/node/.n8n
+      # Mount repo directories for file access inside n8n
+      - ../data:/data
+      - ../templates:/templates
+      - ../prompts:/prompts
+      - ../schemas:/schemas
+
+volumes:
+  n8n_data:
+    driver: local

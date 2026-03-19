@@ -1,0 +1,35 @@
+{
+  "subject_line": "NYC PolicyScope Weekly: Congestion Relief, Gowanus Plans & More",
+  "preview_text": "This week: $40M in congestion pricing relief, a Gowanus rezoning update, and four more local stories across the five boroughs.",
+  "nyc_updates": [
+    {
+      "borough": "Manhattan",
+      "body": "City Hall confirmed $40M in relief funds for small businesses impacted by congestion pricing in lower Manhattan. Applications open April 1 — affected business owners should check nyc.gov/congestionrelief for eligibility details."
+    },
+    {
+      "borough": "Brooklyn",
+      "body": "The Gowanus rezoning plan enters its 60-day public comment period this week. The proposal would add 8,000 housing units near the canal. Residents can submit comments through the City Planning portal."
+    },
+    {
+      "borough": "Queens",
+      "body": "A new multi-agency initiative launches this spring to reduce stormwater runoff into Jamaica Bay. The effort targets measurable water quality improvements by 2028 and includes community stewardship grants."
+    },
+    {
+      "borough": "Bronx",
+      "body": "The South Bronx Community Land Trust secured $12M in city funding to preserve 200 affordable units in Mott Haven. This is one of the largest CLT awards in city history."
+    },
+    {
+      "borough": "Staten Island",
+      "body": "DOT is studying three potential new ferry landings along the North Shore. The study aims to improve transit access and reduce car trips, with public sessions scheduled for May."
+    }
+  ],
+  "main_insight": "NYC's housing and transit policies are accelerating this spring, with major rezoning reviews, new ferry planning, and the first real test of congestion pricing relief programs. Local residents who track these decisions now will have the most influence during public comment periods.",
+  "feature_title": "Why Community Land Trusts Are Gaining Momentum in NYC",
+  "feature_body": "Community Land Trusts (CLTs) have existed for decades, but NYC is now investing in them at scale. The South Bronx award is part of a broader shift toward permanently affordable housing models that separate land ownership from building ownership. Unlike traditional affordable housing with expiring restrictions, CLT units remain affordable in perpetuity. For neighborhoods under displacement pressure, this distinction matters enormously.",
+  "quick_tips": [
+    "Public comment on the Gowanus rezoning closes in 60 days — find the form at nyc.gov/cityplanning",
+    "Congestion pricing small business relief applications open April 1 at nyc.gov/congestionrelief",
+    "DOT is accepting public input on North Shore ferry expansion through May"
+  ],
+  "cta_text": "Know a neighbor or colleague who tracks NYC policy? Forward this edition to them — the more informed voices in public comment periods, the better."
+}

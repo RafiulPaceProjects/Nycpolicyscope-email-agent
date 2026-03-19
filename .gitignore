@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Output previews (generated files — not tracked)
+data/output/*.html
+data/output/*.json
+!data/output/.gitkeep
+
+# n8n runtime data
+docker/n8n_data/
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp

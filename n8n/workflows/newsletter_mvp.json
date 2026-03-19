@@ -1,0 +1,95 @@
+{
+  "name": "NYC PolicyScope — Newsletter MVP",
+  "description": "Reads sample NYC updates, validates structured content JSON, renders HTML preview, saves to output.",
+  "notes": "Phase 1: Manual trigger, local files only. No live APIs. Each node maps to one step in the pipeline.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [200, 300],
+      "parameters": {}
+    },
+    {
+      "id": "read_sample_updates",
+      "name": "Read Sample NYC Updates",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "position": [400, 300],
+      "parameters": {
+        "filePath": "/data/sample/nyc_updates.json"
+      },
+      "notes": "Reads the sample NYC borough updates. In Phase 2, replace with HTTP Request node hitting a real news API."
+    },
+    {
+      "id": "parse_updates",
+      "name": "Parse Updates JSON",
+      "type": "n8n-nodes-base.function",
+      "position": [600, 300],
+      "parameters": {
+        "functionCode": "// Parse the binary file content into a usable object\nconst raw = items[0].binary.data.data;\nconst decoded = Buffer.from(raw, 'base64').toString('utf-8');\nconst updates = JSON.parse(decoded);\n\nreturn [{ json: { updates } }];"
+      }
+    },
+    {
+      "id": "read_content",
+      "name": "Read Newsletter Content JSON",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "position": [800, 300],
+      "parameters": {
+        "filePath": "/data/sample/newsletter_content.json"
+      },
+      "notes": "Reads pre-written structured content. In Phase 2, replace with an AI/LLM node that generates this from updates."
+    },
+    {
+      "id": "parse_content",
+      "name": "Parse Content JSON",
+      "type": "n8n-nodes-base.function",
+      "position": [1000, 300],
+      "parameters": {
+        "functionCode": "const raw = items[0].binary.data.data;\nconst decoded = Buffer.from(raw, 'base64').toString('utf-8');\nconst content = JSON.parse(decoded);\n\n// Basic required field check\nconst required = ['subject_line', 'preview_text', 'nyc_updates', 'main_insight', 'feature_title', 'feature_body', 'quick_tips', 'cta_text'];\nconst missing = required.filter(f => !(f in content));\nif (missing.length > 0) {\n  throw new Error('Missing required fields: ' + missing.join(', '));\n}\n\nreturn [{ json: { content, valid: true } }];"
+      },
+      "notes": "Parses and does basic field presence check. Full JSON schema validation happens in the Python render script."
+    },
+    {
+      "id": "execute_render",
+      "name": "Render HTML Preview",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1200, 300],
+      "parameters": {
+        "command": "cd /repo && python scripts/render_newsletter.py"
+      },
+      "notes": "Runs the Python render script. Output HTML is saved to /data/output/. Check that file for the result."
+    },
+    {
+      "id": "log_result",
+      "name": "Log Result",
+      "type": "n8n-nodes-base.function",
+      "position": [1400, 300],
+      "parameters": {
+        "functionCode": "const output = items[0].json;\nconst timestamp = new Date().toISOString();\nconst log = {\n  status: 'success',\n  timestamp,\n  message: 'Newsletter HTML preview generated.',\n  stdout: output.stdout || '',\n  stderr: output.stderr || ''\n};\nconsole.log(JSON.stringify(log, null, 2));\nreturn [{ json: log }];"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Read Sample NYC Updates", "type": "main", "index": 0 }]]
+    },
+    "Read Sample NYC Updates": {
+      "main": [[{ "node": "Parse Updates JSON", "type": "main", "index": 0 }]]
+    },
+    "Parse Updates JSON": {
+      "main": [[{ "node": "Read Newsletter Content JSON", "type": "main", "index": 0 }]]
+    },
+    "Read Newsletter Content JSON": {
+      "main": [[{ "node": "Parse Content JSON", "type": "main", "index": 0 }]]
+    },
+    "Parse Content JSON": {
+      "main": [[{ "node": "Render HTML Preview", "type": "main", "index": 0 }]]
+    },
+    "Render HTML Preview": {
+      "main": [[{ "node": "Log Result", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "version": 1,
+  "tags": ["newsletter", "mvp", "local"]
+}
