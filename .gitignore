@@ -28,6 +28,12 @@ nanoclaw/app/
 
 # Editor
 .idea/
-.vscode/
 *.swp
 .env
+
+# Keep .vscode config files (extensions + settings help the team)
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Promptfoo results (generated, not tracked)
+promptfoo/results/

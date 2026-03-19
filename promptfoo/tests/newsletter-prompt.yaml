@@ -1,0 +1,166 @@
+# Tests for prompts/newsletter_content.txt
+# Validates that the OpenAI prompt produces schema-compliant JSON content
+#
+# Run: npx promptfoo eval -c ../promptfoo.yaml --filter-tests newsletter-prompt
+
+description: Newsletter Content Generation Prompt Tests
+
+prompts:
+  - file://../prompts/newsletter_content.txt
+
+providers:
+  - id: openai:gpt-4o
+    config:
+      temperature: 0.3
+      response_format:
+        type: json_object
+
+# ─── Test cases ──────────────────────────────────────────────────────────────
+
+tests:
+
+  # ── Test 1: Basic schema compliance ────────────────────────────────────────
+  - description: Output contains all 8 required fields
+    vars:
+      updates: |
+        [
+          {"borough": "Brooklyn", "headline": "New bike lanes on Atlantic Ave", "body": "NYC DOT confirmed 2 miles of protected bike lanes on Atlantic Ave opening April 2026."},
+          {"borough": "Manhattan", "headline": "Congestion pricing update", "body": "MTA reports $450M collected in Q1 2026 from congestion pricing, funds directed to subway upgrades."},
+          {"borough": "Queens", "headline": "Affordable housing lottery opens", "body": "45 units available in Jackson Heights. Applications due March 31 at nyc.gov/housing."}
+        ]
+    assert:
+      - type: is-json
+        description: Output must be valid JSON
+
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          const required = ['subject_line','preview_text','nyc_updates','main_insight','feature_title','feature_body','quick_tips','cta_text'];
+          const missing = required.filter(f => !(f in obj));
+          if (missing.length > 0) return `Missing fields: ${missing.join(', ')}`;
+          return true;
+        description: All 8 required fields present
+
+  # ── Test 2: subject_line length ────────────────────────────────────────────
+  - description: subject_line is 10-80 characters
+    vars:
+      updates: |
+        [
+          {"borough": "Bronx", "headline": "New health clinic opens", "body": "A new community health clinic opened in Mott Haven, accepting Medicaid patients starting April 1."}
+        ]
+    assert:
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          const len = obj.subject_line ? obj.subject_line.length : 0;
+          if (len < 10) return `subject_line too short: ${len} chars`;
+          if (len > 80) return `subject_line too long: ${len} chars`;
+          return true;
+        description: subject_line within 10-80 char limit
+
+  # ── Test 3: preview_text length ────────────────────────────────────────────
+  - description: preview_text is 20-140 characters
+    vars:
+      updates: |
+        [
+          {"borough": "Staten Island", "headline": "Ferry schedule change", "body": "Staten Island Ferry adding weekend service, 30-minute intervals starting June 2026."}
+        ]
+    assert:
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          const len = obj.preview_text ? obj.preview_text.length : 0;
+          if (len < 20) return `preview_text too short: ${len} chars`;
+          if (len > 140) return `preview_text too long: ${len} chars`;
+          return true;
+        description: preview_text within 20-140 char limit
+
+  # ── Test 4: Borough enum validation ────────────────────────────────────────
+  - description: All nyc_updates boroughs use valid enum values
+    vars:
+      updates: |
+        [
+          {"borough": "Brooklyn", "headline": "Story one", "body": "Detail one."},
+          {"borough": "Manhattan", "headline": "Story two", "body": "Detail two."},
+          {"borough": "Citywide", "headline": "Story three", "body": "Detail three."}
+        ]
+    assert:
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          const valid = ['Manhattan','Brooklyn','Queens','Bronx','Staten Island','Citywide'];
+          const invalid = (obj.nyc_updates || []).filter(u => !valid.includes(u.borough));
+          if (invalid.length > 0) return `Invalid boroughs: ${invalid.map(u => u.borough).join(', ')}`;
+          return true;
+        description: All boroughs are valid enum values
+
+  # ── Test 5: No hype / clickbait in subject_line ────────────────────────────
+  - description: subject_line has no hype words
+    vars:
+      updates: |
+        [
+          {"borough": "Queens", "headline": "New bus routes announced", "body": "MTA will add 3 new bus routes in Flushing and Jamaica starting May 2026."}
+        ]
+    assert:
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          const line = (obj.subject_line || '').toLowerCase();
+          const hype = ['huge', 'amazing', 'unbelievable', 'game-changer', 'breaking', 'shocking', '!!!'];
+          const found = hype.filter(w => line.includes(w));
+          if (found.length > 0) return `Hype words found: ${found.join(', ')}`;
+          return true;
+        description: No clickbait or hype words in subject_line
+
+  # ── Test 6: nyc_updates body length ────────────────────────────────────────
+  - description: Each nyc_updates body is 30-400 characters
+    vars:
+      updates: |
+        [
+          {"borough": "Manhattan", "headline": "Housing voucher expansion", "body": "City expanded housing vouchers by 10,000 units. Apply at nyc.gov/hpd by April 15."},
+          {"borough": "Bronx", "headline": "New park opening", "body": "Crotona Park will reopen its renovated athletic fields on April 20 after a 14-month reconstruction."}
+        ]
+    assert:
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          const bad = (obj.nyc_updates || []).filter(u => {
+            const len = (u.body || '').length;
+            return len < 30 || len > 400;
+          });
+          if (bad.length > 0) return `Body length violations: ${bad.map(u => `${u.borough}: ${(u.body||'').length} chars`).join(', ')}`;
+          return true;
+        description: All nyc_updates body fields within 30-400 chars
+
+  # ── Test 7: quick_tips count ───────────────────────────────────────────────
+  - description: quick_tips has 2-5 items
+    vars:
+      updates: |
+        [
+          {"borough": "Brooklyn", "headline": "SNAP benefit reminder", "body": "SNAP emergency allotments end March 31. Check your balance at access.nyc.gov."}
+        ]
+    assert:
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          const count = (obj.quick_tips || []).length;
+          if (count < 2) return `Too few quick_tips: ${count}`;
+          if (count > 5) return `Too many quick_tips: ${count}`;
+          return true;
+        description: quick_tips count between 2 and 5
+
+  # ── Test 8: No markdown fences in output ───────────────────────────────────
+  - description: Output has no markdown code block fences
+    vars:
+      updates: |
+        [
+          {"borough": "Citywide", "headline": "Congestion pricing begins", "body": "Congestion pricing toll went live March 1 for vehicles entering Manhattan below 60th St."}
+        ]
+    assert:
+      - type: not-contains
+        value: "```"
+        description: No markdown triple backtick fences in output
+
+      - type: not-contains
+        value: "```json"
+        description: No json code block markers in output

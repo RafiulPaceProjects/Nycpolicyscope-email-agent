@@ -74,8 +74,8 @@ services:
     depends_on:
       - n8n
     environment:
-      # Anthropic API key for Claude
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # OpenAI API key — used by all nanoclaw Discord agents
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
 
       # Discord bot credentials
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
@@ -85,8 +85,10 @@ services:
       - N8N_BASE_URL=http://n8n:5678
       - N8N_WEBHOOK_TOKEN=${N8N_WEBHOOK_TOKEN:-}
 
-      # Nanoclaw group to load
+      # Nanoclaw group to load (options: nycpolicyscope, n8n-expert, builder, deployer)
       - NANOCLAW_GROUP=nycpolicyscope
+      # Trigger word nanoclaw responds to in Discord
+      - NANOCLAW_TRIGGER=${NANOCLAW_TRIGGER:-@policy}
 
     volumes:
       # Mount our group config so nanoclaw loads the manager CLAUDE.md

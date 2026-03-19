@@ -1,0 +1,40 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.python"
+  },
+
+  "files.associations": {
+    "AGENTS.md": "markdown",
+    "CLAUDE.md": "markdown",
+    "*.html": "html",
+    ".env.example": "dotenv",
+    ".env": "dotenv"
+  },
+
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.envFile": "${workspaceFolder}/.env",
+
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+  },
+
+  "editor.rulers": [80],
+
+  "search.exclude": {
+    "data/output/**": true,
+    "nanoclaw/app/**": true,
+    ".git/**": true
+  },
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "nanoclaw/app": true
+  },
+
+  "terminal.integrated.env.linux": {
+    "PYTHONPATH": "${workspaceFolder}"
+  }
+}
