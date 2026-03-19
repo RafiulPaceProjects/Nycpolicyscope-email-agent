@@ -1,6 +1,6 @@
 {
   "name": "NYC PolicyScope — Full Newsletter Pipeline",
-  "description": "Triggered by nanoclaw webhook. Reads content JSON, validates, generates images, renders HTML, saves output.",
+  "description": "Webhook-triggered pipeline. Optional: generates AI snippet blocks from raw news. Always: validates content, generates images, renders HTML, saves output.\n\nSupports two modes:\n  1. blocks mode: raw_news_file provided → generate_snippets.py → newsletter_blocks.json → validate_blocks.py → render\n  2. flat mode: content_file provided → validate_json.py → render\n\nTriggered by nanoclaw or directly via POST.",
   "nodes": [
     {
       "id": "webhook_trigger",
@@ -13,7 +13,7 @@
         "httpMethod": "POST"
       },
       "webhookId": "newsletter-pipeline",
-      "notes": "Triggered by nanoclaw with:\nPOST /webhook/newsletter-pipeline\nBody: { \"content_file\": \"data/sample/newsletter_content.json\", \"generate_images\": true, \"image_prompt\": \"NYC cityscape\" }"
+      "notes": "POST /webhook/newsletter-pipeline\nHeader: X-Webhook-Token: <N8N_WEBHOOK_TOKEN>\n\nBody options:\n  blocks mode:  { \"raw_news_file\": \"data/sample/nyc_updates.json\", \"generate_images\": true }\n  flat mode:    { \"content_file\": \"data/sample/newsletter_content.json\", \"generate_images\": true }"
     },
     {
       "id": "set_params",
@@ -21,43 +21,72 @@
       "type": "n8n-nodes-base.function",
       "position": [400, 300],
       "parameters": {
-        "functionCode": "const body = $input.first().json;\n\nconst params = {\n  content_file: body.content_file || 'data/sample/newsletter_content.json',\n  generate_images: body.generate_images !== false,\n  image_prompt: (body.image_prompt || 'NYC cityscape editorial photography professional').replace(/[`$();|&<>\\\\]/g, ' ').trim(),\n  image_ratio: body.image_ratio || '16:9',\n  timestamp: new Date().toISOString()\n};\n\nconsole.log('Pipeline parameters:', JSON.stringify(params, null, 2));\nreturn [{ json: params }];"
+        "functionCode": "const body = $input.first().json;\n\n// Sanitize any string fields used in shell commands\nconst sanitize = (s) => (s || '').replace(/[`$();|&<>\\\\]/g, ' ').trim();\n\nconst params = {\n  // blocks mode: raw news → AI snippet generation → blocks JSON\n  raw_news_file: body.raw_news_file || null,\n\n  // flat mode: pre-authored content JSON (legacy)\n  content_file: body.content_file || 'data/sample/newsletter_content.json',\n\n  // image generation\n  generate_images: body.generate_images !== false,\n  image_prompt: sanitize(body.image_prompt || 'NYC cityscape editorial photography professional'),\n  image_ratio: body.image_ratio || '16:9',\n\n  // pipeline mode: 'blocks' or 'flat'\n  mode: body.raw_news_file ? 'blocks' : 'flat',\n\n  timestamp: new Date().toISOString()\n};\n\nconsole.log('Pipeline parameters:', JSON.stringify(params, null, 2));\nreturn [{ json: params }];"
       }
     },
     {
-      "id": "validate_content",
-      "name": "Validate Content JSON",
+      "id": "generate_snippets_step",
+      "name": "Generate Snippet Blocks (AI)",
       "type": "n8n-nodes-base.executeCommand",
-      "position": [600, 300],
+      "position": [600, 200],
+      "parameters": {
+        "command": "=cd /repo && python scripts/generate_snippets.py --input {{ $json.raw_news_file }}"
+      },
+      "notes": "Runs only in blocks mode (raw_news_file was provided).\nCalls OpenAI to generate newsletter_blocks.json from raw news input.\nRequires OPENAI_API_KEY in environment.\nOutput: data/output/blocks_YYYYMMDD_HHMMSS.json"
+    },
+    {
+      "id": "parse_snippets_result",
+      "name": "Parse Snippet Generation Result",
+      "type": "n8n-nodes-base.function",
+      "position": [800, 200],
+      "parameters": {
+        "functionCode": "const cmdResult = $input.first().json;\nconst params = $node['Set Pipeline Parameters'].json;\n\nif (cmdResult.exitCode !== 0) {\n  throw new Error('Snippet generation failed:\\n' + (cmdResult.stderr || cmdResult.stdout || 'unknown error'));\n}\n\n// Extract the output blocks file path from stdout\nconst stdout = cmdResult.stdout || '';\nconst pathMatch = stdout.match(/Blocks saved:\\s*(.+\\.json)/);\nconst blocksFile = pathMatch ? pathMatch[1].trim() : null;\n\nif (!blocksFile) {\n  throw new Error('Could not find blocks output path in generate_snippets.py output.\\nstdout: ' + stdout);\n}\n\nconsole.log('Snippet blocks file:', blocksFile);\nreturn [{ json: { ...params, content_file: blocksFile, blocks_file: blocksFile } }];"
+      }
+    },
+    {
+      "id": "validate_blocks_step",
+      "name": "Validate Blocks JSON",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1000, 200],
+      "parameters": {
+        "command": "=cd /repo && python scripts/validate_blocks.py {{ $json.content_file }}"
+      },
+      "notes": "Validates blocks JSON against schemas/blocks.json."
+    },
+    {
+      "id": "validate_flat_step",
+      "name": "Validate Flat Content JSON",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1000, 400],
       "parameters": {
         "command": "=cd /repo && python scripts/validate_json.py {{ $json.content_file }}"
       },
-      "notes": "Validates content against schemas/newsletter.json before rendering."
+      "notes": "Validates legacy flat content against schemas/newsletter.json."
     },
     {
       "id": "check_validation",
       "name": "Check Validation Result",
       "type": "n8n-nodes-base.function",
-      "position": [800, 300],
+      "position": [1200, 300],
       "parameters": {
-        "functionCode": "const result = $input.first().json;\nif (result.exitCode !== 0) {\n  throw new Error('Content validation failed:\\n' + (result.stderr || result.stdout || 'unknown error'));\n}\nconsole.log('Validation passed:', result.stdout);\n// Pass through the parameters from earlier\nconst params = $node['Set Pipeline Parameters'].json;\nreturn [{ json: params }];"
+        "functionCode": "const result = $input.first().json;\n\n// Accept result from either validate path\nconst params = $node['Set Pipeline Parameters'].json;\n\nif (result.exitCode !== 0) {\n  throw new Error('Content validation failed:\\n' + (result.stderr || result.stdout || 'unknown error'));\n}\nconsole.log('Validation passed:', result.stdout);\n\n// Merge in the content_file from whichever step updated it\n// (blocks mode updated content_file to the blocks output path)\nconst blocksResult = $node['Parse Snippet Generation Result'] ? $node['Parse Snippet Generation Result'].json : null;\nconst mergedParams = blocksResult ? blocksResult : params;\n\nreturn [{ json: mergedParams }];"
       }
     },
     {
       "id": "generate_image_step",
       "name": "Generate Newsletter Image",
       "type": "n8n-nodes-base.executeCommand",
-      "position": [1000, 300],
+      "position": [1400, 300],
       "parameters": {
         "command": "=cd /repo && python scripts/generate_image.py --prompt \"{{ $json.image_prompt }}\" --ratio {{ $json.image_ratio }} --count 1 --json"
       },
-      "notes": "Uses Imagen 2 via Google AI Studio API. Images are raw PNG — no Gemini logo.\nSkipped if generate_images is false."
+      "notes": "Uses Imagen 2 via Google AI Studio API. Raw PNG — no Gemini logo.\nSkip this node if generate_images is false."
     },
     {
       "id": "parse_image_result",
       "name": "Parse Image Result",
       "type": "n8n-nodes-base.function",
-      "position": [1200, 300],
+      "position": [1600, 300],
       "parameters": {
         "functionCode": "const cmdResult = $input.first().json;\nconst params = $node['Check Validation Result'].json;\n\nlet imagePath = null;\n\nif (cmdResult.exitCode === 0) {\n  try {\n    const stdout = cmdResult.stdout || '';\n    const jsonMatch = stdout.match(/\\{[\\s\\S]*\\}/);\n    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : stdout);\n    imagePath = parsed.images && parsed.images[0] ? parsed.images[0] : null;\n  } catch (e) {\n    console.warn('Could not parse image output — continuing without image:', e.message);\n  }\n} else {\n  console.warn('Image generation failed — continuing without image.');\n  console.warn(cmdResult.stderr);\n}\n\nreturn [{ json: { ...params, image_path: imagePath } }];"
       }
@@ -66,19 +95,19 @@
       "id": "render_html",
       "name": "Render HTML Newsletter",
       "type": "n8n-nodes-base.executeCommand",
-      "position": [1400, 300],
+      "position": [1800, 300],
       "parameters": {
         "command": "=cd /repo && python scripts/render_newsletter.py --content {{ $json.content_file }}"
       },
-      "notes": "Runs render_newsletter.py which validates + renders the Jinja2 template.\nOutput saved to data/output/newsletter_YYYYMMDD_HHMMSS.html"
+      "notes": "render_newsletter.py auto-detects flat vs block format.\nOutput saved to data/output/newsletter_YYYYMMDD_HHMMSS.html"
     },
     {
       "id": "parse_render_result",
       "name": "Parse Render Result",
       "type": "n8n-nodes-base.function",
-      "position": [1600, 300],
+      "position": [2000, 300],
       "parameters": {
-        "functionCode": "const cmdResult = $input.first().json;\nconst params = $node['Parse Image Result'].json;\n\nif (cmdResult.exitCode !== 0) {\n  throw new Error('HTML rendering failed:\\n' + (cmdResult.stderr || cmdResult.stdout || 'unknown error'));\n}\n\n// Extract the output path from stdout\nconst stdout = cmdResult.stdout || '';\nconst pathMatch = stdout.match(/Preview saved:\\s*(.+\\.html)/);\nconst htmlPath = pathMatch ? pathMatch[1].trim() : 'data/output/ (check for latest .html file)';\n\nconst summary = {\n  status: 'success',\n  timestamp: params.timestamp,\n  content_file: params.content_file,\n  html_preview: htmlPath,\n  image_path: params.image_path,\n  message: 'Newsletter rendered successfully. Open the HTML file to review.'\n};\n\nconsole.log('Pipeline complete:', JSON.stringify(summary, null, 2));\nreturn [{ json: summary }];"
+        "functionCode": "const cmdResult = $input.first().json;\nconst params = $node['Parse Image Result'].json;\n\nif (cmdResult.exitCode !== 0) {\n  throw new Error('HTML rendering failed:\\n' + (cmdResult.stderr || cmdResult.stdout || 'unknown error'));\n}\n\nconst stdout = cmdResult.stdout || '';\nconst pathMatch = stdout.match(/Preview saved:\\s*(.+\\.html)/);\nconst htmlPath = pathMatch ? pathMatch[1].trim() : 'data/output/ (check for latest .html file)';\n\nconst summary = {\n  status: 'success',\n  timestamp: params.timestamp,\n  mode: params.mode,\n  content_file: params.content_file,\n  blocks_file: params.blocks_file || null,\n  html_preview: htmlPath,\n  image_path: params.image_path,\n  message: 'Newsletter rendered successfully. Open the HTML file to review.'\n};\n\nconsole.log('Pipeline complete:', JSON.stringify(summary, null, 2));\nreturn [{ json: summary }];"
       }
     }
   ],
@@ -87,9 +116,21 @@
       "main": [[{ "node": "Set Pipeline Parameters", "type": "main", "index": 0 }]]
     },
     "Set Pipeline Parameters": {
-      "main": [[{ "node": "Validate Content JSON", "type": "main", "index": 0 }]]
+      "main": [
+        [{ "node": "Generate Snippet Blocks (AI)", "type": "main", "index": 0 }],
+        [{ "node": "Validate Flat Content JSON", "type": "main", "index": 0 }]
+      ]
     },
-    "Validate Content JSON": {
+    "Generate Snippet Blocks (AI)": {
+      "main": [[{ "node": "Parse Snippet Generation Result", "type": "main", "index": 0 }]]
+    },
+    "Parse Snippet Generation Result": {
+      "main": [[{ "node": "Validate Blocks JSON", "type": "main", "index": 0 }]]
+    },
+    "Validate Blocks JSON": {
+      "main": [[{ "node": "Check Validation Result", "type": "main", "index": 0 }]]
+    },
+    "Validate Flat Content JSON": {
       "main": [[{ "node": "Check Validation Result", "type": "main", "index": 0 }]]
     },
     "Check Validation Result": {
@@ -106,6 +147,6 @@
     }
   },
   "active": false,
-  "version": 1,
-  "tags": ["pipeline", "webhook", "full"]
+  "version": 2,
+  "tags": ["pipeline", "webhook", "full", "blocks"]
 }

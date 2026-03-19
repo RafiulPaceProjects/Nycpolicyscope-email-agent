@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "subject_line": "NYC PolicyScope Weekly: Congestion Relief, Gowanus Plans & More",
+    "preview_text": "This week: $40M in congestion pricing relief, Gowanus hits final review, and why CLTs are gaining ground.",
+    "edition": "Vol. 1, No. 1",
+    "week_of": "2026-03-16",
+    "template": "newsletter"
+  },
+  "blocks": [
+    {
+      "type": "news_item",
+      "borough": "Manhattan",
+      "body": "City Hall confirmed $40M in relief funds for small businesses impacted by congestion pricing in lower Manhattan, with applications opening April 1."
+    },
+    {
+      "type": "news_item",
+      "borough": "Brooklyn",
+      "body": "The Gowanus neighborhood rezoning plan enters its 60-day public comment period, potentially adding 8,000 new housing units near the canal."
+    },
+    {
+      "type": "news_item",
+      "borough": "Queens",
+      "body": "A new multi-agency effort to reduce runoff into Jamaica Bay kicks off this spring, targeting improved water quality by 2028."
+    },
+    {
+      "type": "news_item",
+      "borough": "Bronx",
+      "body": "The South Bronx CLT received $12M in city funding to preserve 200 affordable units in Mott Haven over the next decade."
+    },
+    {
+      "type": "news_item",
+      "borough": "Staten Island",
+      "body": "DOT is studying three new ferry landing sites along the North Shore to reduce car dependency and improve transit access."
+    },
+    {
+      "type": "insight",
+      "body": "NYC's housing and transit policies are accelerating simultaneously this spring, creating both opportunities and pressures for community advocates. The convergence of congestion pricing relief, Gowanus rezoning, and CLT funding reflects a city trying to balance growth with affordability — a tension that will define the next decade of neighborhood policy."
+    },
+    {
+      "type": "feature",
+      "title": "Why Community Land Trusts Are Gaining Momentum in NYC",
+      "body": "Community Land Trusts (CLTs) have existed for decades, but the South Bronx CLT's $12M funding announcement signals a new level of city commitment to this model. CLTs acquire land and hold it permanently in trust, allowing homeowners and renters to benefit from below-market prices while the land itself never returns to speculative development.\n\nIn a city where displacement pressure is relentless, the CLT model offers something rare: permanence. Unlike affordable housing tied to time-limited tax incentives, CLT units stay affordable in perpetuity. The Mott Haven announcement covers 200 units over a decade — a small number in a city of 8 million, but a meaningful signal of direction.\n\nFor residents, the key question is governance: CLTs work best when community members sit on the board and shape how land is used. Advocates are watching closely to see whether the South Bronx CLT model scales without losing that accountability structure."
+    },
+    {
+      "type": "tips",
+      "items": [
+        "Public comment on the Gowanus rezoning closes in 60 days — submit at nyc.gov/planning.",
+        "Congestion pricing small business relief applications open April 1 at nyc.gov/congestionrelief.",
+        "DOT is accepting public input on North Shore ferry expansion through March 31.",
+        "NYC CLT Network hosts monthly info sessions for residents considering CLT homeownership."
+      ]
+    },
+    {
+      "type": "cta",
+      "body": "Know a neighbor or colleague who tracks NYC policy? Forward this edition and help grow a sharper, better-informed community. Reply to this email if you have a story tip or correction."
+    }
+  ]
+}

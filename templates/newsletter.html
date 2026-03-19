@@ -22,7 +22,7 @@
     .header-title { color: #ffffff; font-size: 22px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; font-family: Arial, sans-serif; }
     .header-subtitle { color: #a8c0d6; font-size: 13px; margin-top: 6px; font-family: Arial, sans-serif; }
 
-    /* Preview text — hidden */
+    /* Preview text — hidden, for email clients */
     .preview-text { display: none; max-height: 0; overflow: hidden; font-size: 1px; color: #ffffff; }
 
     /* Section labels */
@@ -50,6 +50,20 @@
     .tips-list li:last-child { border-bottom: none; }
     .tips-list li::before { content: "→"; position: absolute; left: 0; color: #1a5276; font-weight: bold; }
 
+    /* Links block */
+    .links-section { padding: 28px 32px; border-bottom: 1px solid #dddddd; }
+    .links-list { list-style: none; padding: 0; margin: 0; }
+    .links-list li { font-size: 13px; line-height: 1.6; padding: 6px 0; border-bottom: 1px solid #eeeeee; }
+    .links-list li:last-child { border-bottom: none; }
+    .links-desc { font-size: 12px; color: #666666; margin-top: 2px; }
+
+    /* Event block */
+    .event-section { padding: 20px 32px; background-color: #f7f9fb; border-bottom: 1px solid #dddddd; border-left: 4px solid #1a2b3c; margin: 0 0 0 0; }
+    .event-section td { padding: 20px 32px; background-color: #f7f9fb; border-left: 4px solid #1a2b3c; }
+    .event-title { font-size: 15px; font-weight: bold; color: #1a2b3c; }
+    .event-meta { font-family: Arial, sans-serif; font-size: 12px; color: #555555; margin-top: 4px; }
+    .event-body { font-size: 13px; line-height: 1.6; color: #333333; margin-top: 8px; }
+
     /* CTA */
     .cta-section { padding: 28px 32px; text-align: center; border-bottom: 1px solid #dddddd; }
     .cta-text { font-size: 15px; line-height: 1.6; color: #333333; font-family: Arial, sans-serif; }
@@ -65,7 +79,7 @@
     /* Mobile */
     @media only screen and (max-width: 640px) {
       .container { width: 100% !important; }
-      .header, .updates-section, .insight-section, .feature-section, .tips-section, .cta-section, .footer {
+      .header, .updates-section, .insight-section, .feature-section, .tips-section, .links-section, .cta-section, .footer {
         padding-left: 20px !important;
         padding-right: 20px !important;
       }
@@ -80,13 +94,131 @@
 <div class="wrapper">
   <table class="container" role="presentation" width="100%" cellpadding="0" cellspacing="0">
 
-    <!-- HEADER -->
+    <!-- HEADER — always rendered -->
     <tr>
       <td class="header">
-        <div class="header-title">NYC PolicyScope</div>
-        <div class="header-subtitle">Your weekly briefing on NYC policy, housing, and community</div>
+        {% if blocks is defined %}
+          {# Block format: check for a hero block to override defaults #}
+          {% set hero_blocks = blocks | selectattr('type', 'equalto', 'hero') | list %}
+          {% if hero_blocks %}
+            <div class="header-title">{{ hero_blocks[0].title }}</div>
+            {% if hero_blocks[0].subtitle is defined %}
+            <div class="header-subtitle">{{ hero_blocks[0].subtitle }}</div>
+            {% endif %}
+          {% else %}
+            <div class="header-title">NYC PolicyScope</div>
+            <div class="header-subtitle">Your weekly briefing on NYC policy, housing, and community</div>
+          {% endif %}
+        {% else %}
+          {# Flat format: static header #}
+          <div class="header-title">NYC PolicyScope</div>
+          <div class="header-subtitle">Your weekly briefing on NYC policy, housing, and community</div>
+        {% endif %}
       </td>
     </tr>
+
+    {% if blocks is defined %}
+    {# ================================================================
+       BLOCK-BASED RENDERING
+       Iterates over the ordered blocks list. Each block type maps to
+       a named section. news_item blocks are collected and grouped into
+       a single NYC Quick Updates section before other blocks render.
+       ================================================================ #}
+
+    {# Group all news_item blocks into the updates section first #}
+    {% set news_items = blocks | selectattr('type', 'equalto', 'news_item') | list %}
+    {% if news_items %}
+    <tr>
+      <td class="updates-section">
+        <div class="section-label">NYC Quick Updates</div>
+        {% for news in news_items %}
+        <div class="update-item">
+          <div class="update-borough">{{ news.borough }}</div>
+          <div class="update-body">{{ news.body }}</div>
+        </div>
+        {% endfor %}
+      </td>
+    </tr>
+    {% endif %}
+
+    {# Render non-news_item blocks in order, skipping hero (already rendered above) #}
+    {% for section in blocks %}
+
+      {% if section.type == 'insight' %}
+      <tr>
+        <td class="insight-section">
+          <div class="section-label">This Week's Insight</div>
+          <div class="insight-body">{{ section.body }}</div>
+        </td>
+      </tr>
+
+      {% elif section.type == 'feature' %}
+      <tr>
+        <td class="feature-section">
+          <div class="section-label">Featured</div>
+          <div class="feature-title">{{ section.title }}</div>
+          <div class="feature-body">{{ section.body }}</div>
+        </td>
+      </tr>
+
+      {% elif section.type == 'tips' %}
+      <tr>
+        <td class="tips-section">
+          <div class="section-label">Quick Tips &amp; Resources</div>
+          <ul class="tips-list">
+            {% for item in section['items'] %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </td>
+      </tr>
+
+      {% elif section.type == 'links' %}
+      <tr>
+        <td class="links-section">
+          <div class="section-label">{{ section.title if section.title is defined else 'Resources' }}</div>
+          <ul class="links-list">
+            {% for link in section['items'] %}
+            <li>
+              <a href="{{ link.url }}">{{ link.label }}</a>
+              {% if link.description is defined %}
+              <div class="links-desc">{{ link.description }}</div>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </td>
+      </tr>
+
+      {% elif section.type == 'event' %}
+      <tr>
+        <td style="padding: 20px 32px 20px 28px; background-color: #f7f9fb; border-bottom: 1px solid #dddddd; border-left: 4px solid #1a2b3c;">
+          <div class="section-label">Upcoming Event</div>
+          <div class="event-title">{{ section.title }}</div>
+          <div class="event-meta">{{ section.date }}{% if section.location is defined %} &nbsp;·&nbsp; {{ section.location }}{% endif %}</div>
+          {% if section.body is defined %}
+          <div class="event-body">{{ section.body }}</div>
+          {% endif %}
+        </td>
+      </tr>
+
+      {% elif section.type == 'cta' %}
+      <tr>
+        <td class="cta-section">
+          <div class="cta-text">{{ section.body }}</div>
+        </td>
+      </tr>
+
+      {% endif %}
+      {# news_item and hero are handled above — skipped in this loop #}
+
+    {% endfor %}
+
+    {% else %}
+    {# ================================================================
+       LEGACY FLAT RENDERING (backward compatible)
+       Uses direct template vars: nyc_updates, main_insight, etc.
+       ================================================================ #}
 
     <!-- NYC QUICK UPDATES -->
     <tr>
@@ -137,7 +269,9 @@
       </td>
     </tr>
 
-    <!-- FOOTER -->
+    {% endif %}
+
+    <!-- FOOTER — always rendered -->
     <tr>
       <td class="footer">
         <p>
