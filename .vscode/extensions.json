@@ -1,0 +1,17 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "github.copilot",
+    "redhat.vscode-yaml",
+    "zainchen.json",
+    "wholroyd.jinja",
+    "ms-vscode.live-server",
+    "ms-azuretools.vscode-docker",
+    "eamodio.gitlens",
+    "humao.rest-client",
+    "yzhang.markdown-all-in-one",
+    "mikestead.dotenv",
+    "esbenp.prettier-vscode"
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "name": "NYC PolicyScope — Fetch GHL Email Template",
+  "description": "Triggered by nanoclaw webhook. Fetches email templates from GoHighLevel and saves them locally for rendering.",
+  "notes": "Phase 1: Structure only. Fill in GHL_API_KEY and GHL_LOCATION_ID in .env before activating.",
+  "nodes": [
+    {
+      "id": "webhook_trigger",
+      "name": "Webhook: Fetch GHL Template",
+      "type": "n8n-nodes-base.webhook",
+      "position": [200, 300],
+      "parameters": {
+        "path": "ghl-fetch-template",
+        "responseMode": "responseNode",
+        "httpMethod": "POST",
+        "authentication": "headerAuth"
+      },
+      "webhookId": "ghl-fetch-template",
+      "notes": "Triggered by nanoclaw with: POST /webhook/ghl-fetch-template\nHeader: X-Webhook-Token: <N8N_WEBHOOK_TOKEN>"
+    },
+    {
+      "id": "validate_token",
+      "name": "Validate Webhook Token",
+      "type": "n8n-nodes-base.function",
+      "position": [400, 300],
+      "parameters": {
+        "functionCode": "const token = $input.first().headers['x-webhook-token'];\nconst expected = process.env.N8N_WEBHOOK_TOKEN || '';\nif (!expected) {\n  // No token configured — warn but allow through in dev\n  console.warn('WARNING: N8N_WEBHOOK_TOKEN not set. Allowing request through.');\n  return $input.all();\n}\nif (token !== expected) {\n  throw new Error('Unauthorized: invalid webhook token');\n}\nreturn $input.all();"
+      }
+    },
+    {
+      "id": "fetch_templates",
+      "name": "GET GHL Email Templates",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [600, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GHL_API_BASE }}/templates/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "headers": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GHL_API_KEY }}"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "locationId",
+              "value": "={{ $env.GHL_LOCATION_ID }}"
+            },
+            {
+              "name": "type",
+              "value": "email"
+            },
+            {
+              "name": "limit",
+              "value": "20"
+            }
+          ]
+        }
+      },
+      "notes": "GHL API docs: https://highlevel.stoplight.io/docs/integrations/\nReplace env vars with real values in .env"
+    },
+    {
+      "id": "extract_templates",
+      "name": "Extract and Format Templates",
+      "type": "n8n-nodes-base.function",
+      "position": [800, 300],
+      "parameters": {
+        "functionCode": "const data = $input.first().json;\nconst templates = (data.templates || data || []).map(t => ({\n  id: t.id,\n  name: t.name,\n  type: t.type,\n  subject: t.subject || '',\n  html: t.html || t.body || '',\n  updatedAt: t.updatedAt || t.dateUpdated || ''\n}));\n\nreturn [{ json: { templates, count: templates.length } }];"
+      }
+    },
+    {
+      "id": "save_templates",
+      "name": "Save Templates to File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "position": [1000, 300],
+      "parameters": {
+        "fileName": "/data/output/ghl_templates.json",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "notes": "Saves fetched templates to data/output/ghl_templates.json for local review and use in rendering."
+    },
+    {
+      "id": "prepare_file_data",
+      "name": "Prepare File Data",
+      "type": "n8n-nodes-base.function",
+      "position": [900, 300],
+      "parameters": {
+        "functionCode": "const content = $input.first().json;\nconst jsonStr = JSON.stringify(content, null, 2);\nconst base64 = Buffer.from(jsonStr).toString('base64');\nreturn [{\n  json: {},\n  binary: {\n    data: {\n      data: base64,\n      mimeType: 'application/json',\n      fileName: 'ghl_templates.json'\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1200, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'success', message: 'Templates fetched and saved', count: $node['Extract and Format Templates'].json.count, savedTo: 'data/output/ghl_templates.json' }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Fetch GHL Template": {
+      "main": [[{ "node": "Validate Webhook Token", "type": "main", "index": 0 }]]
+    },
+    "Validate Webhook Token": {
+      "main": [[{ "node": "GET GHL Email Templates", "type": "main", "index": 0 }]]
+    },
+    "GET GHL Email Templates": {
+      "main": [[{ "node": "Extract and Format Templates", "type": "main", "index": 0 }]]
+    },
+    "Extract and Format Templates": {
+      "main": [[{ "node": "Prepare File Data", "type": "main", "index": 0 }]]
+    },
+    "Prepare File Data": {
+      "main": [[{ "node": "Save Templates to File", "type": "main", "index": 0 }]]
+    },
+    "Save Templates to File": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "version": 1,
+  "tags": ["ghl", "templates", "webhook"]
+}

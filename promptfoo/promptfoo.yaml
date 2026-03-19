@@ -1,0 +1,39 @@
+# NYC PolicyScope Lab — Promptfoo Eval Config
+# Run: npx promptfoo eval
+# View: npx promptfoo view
+
+description: NYC PolicyScope Newsletter Prompt Evaluations
+
+# ─── Providers ───────────────────────────────────────────────────────────────
+# All evals run against OpenAI (system uses OpenAI API, not Anthropic)
+
+providers:
+  - id: openai:gpt-4o
+    config:
+      temperature: 0.3
+      response_format:
+        type: json_object   # Force JSON-only output — no markdown fences
+
+  # Optionally test against a cheaper model for regression checks
+  - id: openai:gpt-4o-mini
+    config:
+      temperature: 0.3
+      response_format:
+        type: json_object
+
+# ─── Default test settings ───────────────────────────────────────────────────
+defaultTest:
+  options:
+    # Fail if provider throws any error
+    provider: openai:gpt-4o
+
+# ─── Test suites ─────────────────────────────────────────────────────────────
+# Each test file covers a different prompt or agent behavior
+
+tests:
+  - tests/newsletter-prompt.yaml
+  - tests/nanoclaw-manager.yaml
+  - tests/nanoclaw-n8n-expert.yaml
+
+# ─── Output settings ─────────────────────────────────────────────────────────
+outputPath: results/latest.json

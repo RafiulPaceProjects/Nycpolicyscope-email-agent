@@ -1,0 +1,161 @@
+# Tests for nanoclaw/groups/nycpolicyscope/CLAUDE.md (PolicyBot — Manager Agent)
+# Tests that the manager agent behaves correctly when reviewing content
+# and responding to workflow trigger requests.
+#
+# Run: npx promptfoo eval -c ../promptfoo.yaml --filter-tests nanoclaw-manager
+
+description: PolicyBot Manager Agent Behavior Tests
+
+prompts:
+  - |
+    {{ system_prompt }}
+
+    User message: {{ user_message }}
+
+providers:
+  - id: openai:gpt-4o
+    config:
+      temperature: 0.2  # Low temp for consistent, rules-following behavior
+
+# Shared system prompt from the manager CLAUDE.md
+defaultTest:
+  vars:
+    system_prompt: |
+      You are PolicyBot, the manager agent for NYC PolicyScope Lab. You review,
+      approve, and coordinate the weekly NYC newsletter pipeline end-to-end.
+
+      You interact with the team via Discord.
+
+      Your responsibilities:
+      - Review newsletter content JSON for schema compliance and tone
+      - Trigger n8n workflows via webhook when instructed
+      - Report back what ran, what the output is, and what the next step is
+
+      Content standards to enforce:
+      - subject_line: 10–80 characters
+      - preview_text: 20–140 characters
+      - nyc_updates.borough: one of Manhattan, Brooklyn, Queens, Bronx, Staten Island, Citywide
+      - nyc_updates.body: max 400 characters, factual, no hype
+      - quick_tips: 2–5 items, each max 200 characters
+      - cta_text: max 300 characters, community-oriented, no hard sales
+
+      Tone rules:
+      Good: "City Hall confirmed $40M in relief funds." / "Applications open April 1."
+      Bad: "HUGE news!" / "game-changer!!!" / vague, hyped, or opinionated language
+
+      What you do NOT do:
+      - Do not generate content yourself without being asked
+      - Do not trigger workflows without explicit instruction
+      - Do not redesign the HTML template
+      - Do not push to GHL without confirmation
+
+      Keep responses short and specific.
+
+# ─── Test cases ──────────────────────────────────────────────────────────────
+
+tests:
+
+  # ── Test 1: Detects missing field ─────────────────────────────────────────
+  - description: Flags missing required field (quick_tips)
+    vars:
+      user_message: |
+        Please review this content:
+        {
+          "subject_line": "NYC Housing Lottery Opens in Queens",
+          "preview_text": "45 units in Jackson Heights, congestion pricing revenue update, new Bronx clinic.",
+          "nyc_updates": [{"borough": "Queens", "body": "45 affordable units available in Jackson Heights. Apply by March 31 at nyc.gov/housing."}],
+          "main_insight": "This week highlights the continued expansion of affordable housing across the five boroughs.",
+          "feature_title": "Queens Housing Surge",
+          "feature_body": "The Jackson Heights lottery represents one of the largest affordable housing openings in 2026.",
+          "cta_text": "Share this with a neighbor who needs housing resources."
+        }
+    assert:
+      - type: contains
+        value: "quick_tips"
+        description: Identifies missing quick_tips field
+
+      - type: javascript
+        value: |
+          const lower = output.toLowerCase();
+          return lower.includes('missing') || lower.includes('required') || lower.includes('absent');
+        description: Uses clear language about the field being missing
+
+  # ── Test 2: Detects body over 400 chars ────────────────────────────────────
+  - description: Flags nyc_updates body that exceeds 400 characters
+    vars:
+      user_message: |
+        Review this:
+        {
+          "subject_line": "Bronx Gets New Clinic",
+          "preview_text": "New health clinic in Mott Haven, housing update, transit news.",
+          "nyc_updates": [{"borough": "Bronx", "body": "A new community health clinic has officially opened its doors in the Mott Haven neighborhood of the South Bronx, accepting Medicaid, Medicare, and uninsured patients starting April 1st 2026. The clinic will offer primary care, mental health services, dental care, and pediatrics, with extended hours on weekdays until 8pm and Saturday hours from 9am to 2pm to serve working families in the area."}],
+          "main_insight": "New services are expanding access to healthcare in underserved areas.",
+          "feature_title": "Bronx Healthcare Expansion",
+          "feature_body": "The Mott Haven clinic is part of a citywide effort to bring healthcare closer to residents.",
+          "quick_tips": ["Call 311 for clinic locations", "Visit nyc.gov/health"],
+          "cta_text": "Pass this along to a neighbor who could use these resources."
+        }
+    assert:
+      - type: javascript
+        value: |
+          const lower = output.toLowerCase();
+          return lower.includes('400') || lower.includes('too long') || lower.includes('characters') || lower.includes('trim');
+        description: Flags the body length violation
+
+  # ── Test 3: Detects invalid borough ────────────────────────────────────────
+  - description: Rejects invalid borough name
+    vars:
+      user_message: |
+        Quick check on this update — is the borough name OK?
+        {"borough": "New York City", "body": "New transit data shows ridership up 12% across all modes."}
+    assert:
+      - type: javascript
+        value: |
+          const lower = output.toLowerCase();
+          return lower.includes('invalid') || lower.includes('not valid') || lower.includes('must be') || lower.includes('enum') || lower.includes('citywide');
+        description: Flags invalid borough name
+
+  # ── Test 4: Detects hype tone ──────────────────────────────────────────────
+  - description: Flags hype/clickbait language in body text
+    vars:
+      user_message: |
+        Review this update:
+        {"borough": "Manhattan", "body": "HUGE news for NYC residents — congestion pricing is a total GAME CHANGER for the entire city and you won't believe the results!!!"}
+    assert:
+      - type: javascript
+        value: |
+          const lower = output.toLowerCase();
+          return lower.includes('hype') || lower.includes('tone') || lower.includes('factual') || lower.includes('no hype') || lower.includes('clickbait') || lower.includes('exclamation');
+        description: Identifies hype/clickbait tone violation
+
+  # ── Test 5: Refuses to redesign template ───────────────────────────────────
+  - description: Refuses to redesign the HTML template
+    vars:
+      user_message: |
+        Can you redesign the newsletter HTML template to use a two-column layout
+        with a dark header and rounded corners?
+    assert:
+      - type: javascript
+        value: |
+          const lower = output.toLowerCase();
+          return lower.includes("don't") || lower.includes("do not") || lower.includes("won't") || lower.includes("cannot") || lower.includes("not my role") || lower.includes("not redesign");
+        description: Declines template redesign request
+
+  # ── Test 6: Gives specific feedback, not vague ─────────────────────────────
+  - description: Feedback is specific, not vague
+    vars:
+      user_message: |
+        Review: {"subject_line": "NYC", "preview_text": "Update", "nyc_updates": [], "main_insight": "Things happened.", "feature_title": "Story", "feature_body": "Body.", "quick_tips": [], "cta_text": "OK"}
+    assert:
+      - type: javascript
+        value: |
+          // Should NOT give vague feedback like "looks mostly good"
+          const lower = output.toLowerCase();
+          return !lower.includes('looks mostly good') && !lower.includes('could be improved in a few areas');
+        description: Avoids vague positive feedback on clearly bad content
+
+      - type: javascript
+        value: |
+          // Should mention specific fields
+          return output.includes('subject_line') || output.includes('nyc_updates') || output.includes('quick_tips') || output.includes('preview_text');
+        description: References specific field names in feedback

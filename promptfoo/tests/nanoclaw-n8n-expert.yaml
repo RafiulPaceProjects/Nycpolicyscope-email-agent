@@ -1,0 +1,124 @@
+# Tests for nanoclaw/groups/n8n-expert/CLAUDE.md (FlowBot — n8n Expert Agent)
+# Tests that the n8n expert gives correct, specific workflow guidance.
+#
+# Run: npx promptfoo eval -c ../promptfoo.yaml --filter-tests nanoclaw-n8n-expert
+
+description: FlowBot n8n Expert Agent Behavior Tests
+
+prompts:
+  - |
+    {{ system_prompt }}
+
+    User message: {{ user_message }}
+
+providers:
+  - id: openai:gpt-4o
+    config:
+      temperature: 0.2
+
+defaultTest:
+  vars:
+    system_prompt: |
+      You are FlowBot, the n8n workflow specialist for NYC PolicyScope Lab.
+
+      You know these 4 workflows:
+      1. newsletter_mvp.json — Manual trigger, local files, runs render_newsletter.py
+      2. full_pipeline.json — Webhook POST /webhook/newsletter-pipeline, validates + renders + images
+      3. ghl_fetch_template.json — Webhook POST /webhook/ghl-fetch-template, fetches GHL email templates
+      4. generate_images.json — Webhook POST /webhook/generate-images, runs Imagen 2
+
+      All webhooks require header: X-Webhook-Token: <N8N_WEBHOOK_TOKEN>
+
+      Key n8n facts:
+      - ExecuteCommand nodes run: cd /repo && python scripts/<name>.py
+      - Binary file reads need base64 decode: Buffer.from(raw, 'base64').toString('utf-8')
+      - Get node output: $node['Node Name'].json (exact name match)
+      - Env vars in Function nodes: process.env.VAR_NAME
+      - exitCode !== 0 means the command failed — always check it
+      - n8n UI: http://localhost:5678
+
+      Give short, specific answers. Name the exact node, exact fix, exact command.
+
+# ─── Test cases ──────────────────────────────────────────────────────────────
+
+tests:
+
+  # ── Test 1: Correct webhook path for full pipeline ────────────────────────
+  - description: Knows the correct webhook path for the full pipeline
+    vars:
+      user_message: What's the webhook path to trigger the full newsletter pipeline?
+    assert:
+      - type: contains
+        value: "/webhook/newsletter-pipeline"
+        description: States correct webhook path
+
+      - type: contains
+        value: "POST"
+        description: States correct HTTP method
+
+  # ── Test 2: Knows about webhook token auth ─────────────────────────────────
+  - description: Knows webhook authentication requirement
+    vars:
+      user_message: How do I authenticate when calling n8n webhooks from nanoclaw?
+    assert:
+      - type: javascript
+        value: |
+          const lower = output.toLowerCase();
+          return lower.includes('x-webhook-token') || lower.includes('webhook token') || lower.includes('n8n_webhook_token');
+        description: Mentions X-Webhook-Token header
+
+  # ── Test 3: Diagnoses exitCode 1 correctly ────────────────────────────────
+  - description: Diagnoses Python script failure in ExecuteCommand node
+    vars:
+      user_message: |
+        My "Render HTML Preview" node failed with exitCode 1 and nothing in stdout.
+        What should I check?
+    assert:
+      - type: javascript
+        value: |
+          const lower = output.toLowerCase();
+          return lower.includes('stderr') || lower.includes('error output') || lower.includes('stderr field');
+        description: Tells user to check stderr
+
+  # ── Test 4: Knows base64 binary decode pattern ────────────────────────────
+  - description: Knows the binary file read decode pattern
+    vars:
+      user_message: |
+        When I read a JSON file with the readBinaryFile node, the content looks like
+        garbled characters. How do I parse it properly?
+    assert:
+      - type: javascript
+        value: |
+          return output.includes('base64') || output.includes('Buffer.from') || output.includes('decode');
+        description: Mentions base64 decoding
+
+  # ── Test 5: Knows correct node reference syntax ───────────────────────────
+  - description: Knows how to reference output from a specific upstream node
+    vars:
+      user_message: In a Function node, how do I get the output from a node called "Set Pipeline Parameters"?
+    assert:
+      - type: javascript
+        value: |
+          return output.includes("$node['Set Pipeline Parameters']") || output.includes('$node["Set Pipeline Parameters"]');
+        description: Shows correct $node['Node Name'] syntax
+
+  # ── Test 6: Knows the generate-images body format ─────────────────────────
+  - description: Knows the request body format for generate-images webhook
+    vars:
+      user_message: What JSON body do I send to the generate-images webhook?
+    assert:
+      - type: javascript
+        value: |
+          return output.includes('prompt') && (output.includes('aspect_ratio') || output.includes('ratio'));
+        description: Mentions prompt and aspect_ratio fields
+
+  # ── Test 7: Doesn't write Python scripts ──────────────────────────────────
+  - description: Redirects Python coding questions to the builder agent
+    vars:
+      user_message: Can you rewrite the render_newsletter.py script to add a new feature?
+    assert:
+      - type: javascript
+        value: |
+          const lower = output.toLowerCase();
+          return lower.includes('builder') || lower.includes('buildbot') || lower.includes("not my role") || lower.includes("script writing") || lower.includes("that's");
+        description: Redirects to builder agent or declines Python coding task
